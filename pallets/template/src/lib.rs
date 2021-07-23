@@ -1,9 +1,8 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
-/// Edit this file to define custom logic or remove it if it is not needed.
-/// Learn more about FRAME and the core library of Substrate FRAME pallets:
-/// <https://substrate.dev/docs/en/knowledgebase/runtime/frame>
 pub use pallet::*;
+use codec::{Decode, Encode};
+use substrate_fixed::{types::I32F32};
 
 #[cfg(test)]
 mod mock;
@@ -14,90 +13,108 @@ mod tests;
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
 
+#[derive(Encode, Decode, Default, PartialEq, Eq)]
+#[cfg_attr(feature = "std", derive(Debug))]
+pub struct AccountInfo<BlockNumber> {
+    /// The balance of the account after last adjustment
+    deposit_principal: I32F32,
+    /// The time (block height) at which the deposit balance was last adjusted
+    deposit_date: BlockNumber,
+    /// Borrowed balance
+    borrow_principal: I32F32,
+    /// The time (block height) at which the borrowing balance was last adjusted
+    borrow_date: BlockNumber,
+}
+
 #[frame_support::pallet]
 pub mod pallet {
-	use frame_support::{dispatch::DispatchResult, pallet_prelude::*};
-	use frame_system::pallet_prelude::*;
+    use frame_support::{dispatch::DispatchResult, pallet_prelude::*};
+    use frame_system::pallet_prelude::*;
+    use crate::{AccountInfo, I32F32};
+    use frame_support::traits::{Currency, ReservableCurrency, ExistenceRequirement};
+    use sp_runtime::{SaturatedConversion, ModuleId};
+    use sp_runtime::traits::AccountIdConversion;
 
-	/// Configure the pallet by specifying the parameters and types on which it depends.
-	#[pallet::config]
-	pub trait Config: frame_system::Config {
-		/// Because this pallet emits events, it depends on the runtime's definition of an event.
-		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
-	}
+    const PALLET_ID: ModuleId = ModuleId(*b"crsearly");
 
-	#[pallet::pallet]
-	#[pallet::generate_store(pub(super) trait Store)]
-	pub struct Pallet<T>(_);
+    /// Configure the pallet by specifying the parameters and types on which it depends.
+    #[pallet::config]
+    pub trait Config: frame_system::Config {
+        /// Because this pallet emits events, it depends on the runtime's definition of an event.
+        type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 
-	// The pallet's runtime storage items.
-	// https://substrate.dev/docs/en/knowledgebase/runtime/storage
-	#[pallet::storage]
-	#[pallet::getter(fn something)]
-	// Learn more about declaring storage items:
-	// https://substrate.dev/docs/en/knowledgebase/runtime/storage#declaring-storage-items
-	pub type Something<T> = StorageValue<_, u32>;
+        /// The currency in which deposit/borrowing work
+        type Currency: ReservableCurrency<Self::AccountId>;
+    }
 
-	// Pallets use events to inform users when important changes are made.
-	// https://substrate.dev/docs/en/knowledgebase/runtime/events
-	#[pallet::event]
-	#[pallet::metadata(T::AccountId = "AccountId")]
-	#[pallet::generate_deposit(pub(super) fn deposit_event)]
-	pub enum Event<T: Config> {
-		/// Event documentation should end with an array that provides descriptive names for event
-		/// parameters. [something, who]
-		SomethingStored(u32, T::AccountId),
-	}
+    type AccountIdOf<T> = <T as frame_system::Config>::AccountId;
+    type BalanceOf<T> = <<T as Config>::Currency as Currency<AccountIdOf<T>>>::Balance;
 
-	// Errors inform users that something went wrong.
-	#[pallet::error]
-	pub enum Error<T> {
-		/// Error names should be descriptive.
-		NoneValue,
-		/// Errors should have helpful documentation associated with them.
-		StorageOverflow,
-	}
+    #[pallet::pallet]
+    #[pallet::generate_store(pub (super) trait Store)]
+    pub struct Pallet<T>(_);
 
-	// Dispatchable functions allows users to interact with the pallet and invoke state changes.
-	// These functions materialize as "extrinsics", which are often compared to transactions.
-	// Dispatchable functions must be annotated with a weight and must return a DispatchResult.
-	#[pallet::call]
-	impl<T: Config> Pallet<T> {
-		/// An example dispatchable that takes a singles value as a parameter, writes the value to
-		/// storage and emits an event. This function must be dispatched by a signed extrinsic.
-		#[pallet::weight(10_000 + T::DbWeight::get().writes(1))]
-		pub fn do_something(origin: OriginFor<T>, something: u32) -> DispatchResult {
-			// Check that the extrinsic was signed and get the signer.
-			// This function will return an error if the extrinsic is not signed.
-			// https://substrate.dev/docs/en/knowledgebase/runtime/origin
-			let who = ensure_signed(origin)?;
+    #[pallet::storage]
+    #[pallet::getter(fn accounts)]
+    pub(super) type Accounts<T: Config> = StorageMap<_, Blake2_128Concat, AccountIdOf<T>, AccountInfo<T::BlockNumber>, ValueQuery>;
 
-			// Update storage.
-			<Something<T>>::put(something);
+    #[pallet::event]
+    #[pallet::metadata(AccountIdOf < T > = "AccountId", T::BlockNumber = "BlockNumber")]
+    #[pallet::generate_deposit(pub (super) fn deposit_event)]
+    pub enum Event<T: Config> {
+        /// Funds deposited. [who, amount, block]
+        Deposited(AccountIdOf<T>, I32F32, T::BlockNumber),
+    }
 
-			// Emit an event.
-			Self::deposit_event(Event::SomethingStored(something, who));
-			// Return a successful DispatchResultWithPostInfo
-			Ok(())
-		}
+    #[pallet::error]
+    pub enum Error<T> {
+        /// User's borrowed amount is not zero
+        UserInDebt,
+    }
 
-		/// An example dispatchable that may throw a custom error.
-		#[pallet::weight(10_000 + T::DbWeight::get().reads_writes(1,1))]
-		pub fn cause_error(origin: OriginFor<T>) -> DispatchResult {
-			let _who = ensure_signed(origin)?;
+    #[pallet::call]
+    impl<T: Config> Pallet<T> {
+        /// Deposit funds
+        #[pallet::weight(10_000 + T::DbWeight::get().writes(1))]
+        pub fn deposit(origin: OriginFor<T>, amount: BalanceOf<T>) -> DispatchResult {
+            // Check that the extrinsic was signed and get the signer.
+            // This function will return an error if the extrinsic is not signed.
+            let user = ensure_signed(origin)?;
 
-			// Read a value from storage.
-			match <Something<T>>::get() {
-				// Return an error if the value has not been set.
-				None => Err(Error::<T>::NoneValue)?,
-				Some(old) => {
-					// Increment the value read from storage; will error in the event of overflow.
-					let new = old.checked_add(1).ok_or(Error::<T>::StorageOverflow)?;
-					// Update the value in storage with the incremented result.
-					<Something<T>>::put(new);
-					Ok(())
-				},
-			}
-		}
-	}
+            // Get account info of extrinsic caller and check if it has borrowed funds
+            let mut account_info = <Accounts<T>>::get(&user);
+            ensure!(account_info.borrow_principal == 0, Error::<T>::UserInDebt);
+
+            let current_block = frame_system::Pallet::<T>::block_number();
+            let deposit_amount = I32F32::from_num(amount.saturated_into::<u128>());
+
+            // Deposit funds to pallet
+            T::Currency::transfer(
+                &user,
+                &Self::account_id(),
+                amount,
+                ExistenceRequirement::AllowDeath,
+            )?;
+
+            // Set account info
+            account_info.deposit_principal += deposit_amount;
+            account_info.deposit_date = current_block;
+
+            // Put updated account info into storage
+            <Accounts<T>>::insert(&user, account_info);
+
+            // Emit an event
+            Self::deposit_event(Event::Deposited(user, deposit_amount, current_block));
+
+            // Return a successful DispatchResult
+            Ok(())
+        }
+    }
+
+    impl<T: Config> Pallet<T> {
+        /// The account ID of pallet
+        fn account_id() -> T::AccountId {
+            PALLET_ID.into_account()
+        }
+    }
 }
