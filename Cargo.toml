@@ -2,6 +2,8 @@
 members = [
     'node',
     'pallets/defi',
+    'pallets/defi/rpc',
+    'pallets/defi/runtime-api',
     'runtime',
 ]
 [profile.release]

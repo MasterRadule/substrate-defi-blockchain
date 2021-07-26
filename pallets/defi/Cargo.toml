@@ -11,9 +11,6 @@ version = '1.0.0'
 [package.metadata.docs.rs]
 targets = ['x86_64-unknown-linux-gnu']
 
-[dependencies.serde]
-version = '1.0.119'
-
 [dependencies.codec]
 default-features = false
 features = ['derive']
@@ -50,6 +47,10 @@ default-features = false
 git = 'https://github.com/paritytech/substrate.git'
 tag = 'monthly-2021-07'
 version = '3.0.0'
+
+[dependencies.pallet-defi-rpc-runtime-api]
+version = "1.0.0"
+path = "runtime-api"
 
 [features]
 default = ['std']

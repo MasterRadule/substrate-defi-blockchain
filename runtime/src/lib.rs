@@ -444,6 +444,12 @@ impl_runtime_apis! {
 		}
 	}
 
+	impl pallet_defi_rpc_runtime_api::DefiModuleAPI<Block, AccountId, Balance> for Runtime {
+		fn get_balance(user: AccountId) -> pallet_defi_rpc_runtime_api::BalanceInfo<Balance> {
+			DefiModule::get_balance(user)
+		}
+	}
+
 	#[cfg(feature = "runtime-benchmarks")]
 	impl frame_benchmarking::Benchmark<Block> for Runtime {
 		fn dispatch_benchmark(

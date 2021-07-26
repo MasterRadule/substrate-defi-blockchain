@@ -1,0 +1,56 @@
+[package]
+name = "pallet-defi-rpc-runtime-api"
+version = "1.0.0"
+authors = ['Danijel Radulović <master.daca09@gmail.com>']
+edition = "2018"
+license = "Apache-2.0"
+homepage = "https://substrate.dev"
+repository = 'https://github.com/MasterRadule/substrate-defi-blockchain'
+description = "RPC runtime API for defi pallet"
+readme = "README.md"
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
+
+[dependencies.codec]
+default-features = false
+features = ['derive']
+package = 'parity-scale-codec'
+version = '2.0.0'
+
+[dependencies.sp-api]
+default-features = false
+git = 'https://github.com/paritytech/substrate.git'
+tag = 'monthly-2021-07'
+version = '3.0.0'
+
+[dependencies.sp-runtime]
+default-features = false
+git = 'https://github.com/paritytech/substrate.git'
+tag = 'monthly-2021-07'
+version = '3.0.0'
+
+[dependencies.serde]
+default-features = false
+features = ["derive"]
+version = '1.0.101'
+optional = true
+
+[dependencies.getrandom]
+default-features = false
+version = "0.2"
+features = ["js"]
+
+[dependencies.sp-std]
+version = "3.0.0"
+default-features = false
+
+[features]
+default = ["std"]
+std = [
+    "serde",
+    "codec/std",
+    "sp-api/std",
+    "sp-runtime/std",
+    "sp-std/std",
+]

@@ -171,5 +171,8 @@ git = 'https://github.com/paritytech/substrate.git'
 tag = 'monthly-2021-07'
 version = '3.0.0'
 
+[dependencies.pallet-defi-rpc]
+path = '../pallets/defi/rpc'
+
 [[bin]]
 name = 'node-template'

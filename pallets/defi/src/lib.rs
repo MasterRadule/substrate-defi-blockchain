@@ -1,5 +1,4 @@
 #![cfg_attr(not(feature = "std"), no_std)]
-
 pub use pallet::*;
 use codec::{Decode, Encode};
 
@@ -35,6 +34,7 @@ pub mod pallet {
     use frame_support::sp_runtime::sp_std::convert::TryInto;
     use frame_support::sp_runtime::{FixedU128, FixedPointNumber, SaturatedConversion};
     use sp_runtime::traits::AccountIdConversion;
+    use pallet_defi_rpc_runtime_api::BalanceInfo;
 
     const PALLET_ID: PalletId = PalletId(*b"defisrvc");
 
@@ -115,14 +115,15 @@ pub mod pallet {
 
     impl<T: Config> Pallet<T> {
         /// The account ID of pallet
-        pub fn account_id() -> T::AccountId {
+        fn account_id() -> T::AccountId {
             PALLET_ID.into_account()
         }
 
-        pub fn get_balance(user: &T::AccountId) -> BalanceOf<T> {
+        /// Get user's current balance
+        pub fn get_balance(user: T::AccountId) -> BalanceInfo<BalanceOf<T>> {
             let account_info = <Accounts<T>>::get(user);
             if account_info.deposit_principal == <BalanceOf<T>>::zero() {
-                return <BalanceOf<T>>::zero();
+                return BalanceInfo{ balance: <BalanceOf<T>>::zero() };
             }
 
             // Calculate elapsed blocks
@@ -135,8 +136,9 @@ pub mod pallet {
             let rate = FixedU128::from_inner(5) / FixedU128::from_inner(100);
             let multiplier = (FixedU128::one() + rate).saturating_pow(elapsed_time as usize).saturating_sub(FixedU128::one());
             let deposit_principal_fixed = FixedU128::from_inner(account_info.deposit_principal.saturated_into::<u128>());
+            let balance = deposit_principal_fixed.saturating_add(deposit_principal_fixed.saturating_mul(multiplier)).into_inner().saturated_into();
 
-            return deposit_principal_fixed.saturating_add(deposit_principal_fixed.saturating_mul(multiplier)).into_inner().saturated_into();
+            return BalanceInfo{balance};
         }
     }
 }

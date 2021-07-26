@@ -39,6 +39,7 @@ std = [
     'pallet-randomness-collective-flip/std',
     'pallet-sudo/std',
     'pallet-defi/std',
+    'pallet-defi-rpc-runtime-api/std',
     'pallet-timestamp/std',
     'pallet-transaction-payment-rpc-runtime-api/std',
     'pallet-transaction-payment/std',
@@ -135,6 +136,11 @@ version = '3.0.0'
 [dependencies.pallet-defi]
 default-features = false
 path = '../pallets/defi'
+version = '1.0.0'
+
+[dependencies.pallet-defi-rpc-runtime-api]
+default-features = false
+path = '../pallets/defi/runtime-api'
 version = '1.0.0'
 
 [dependencies.pallet-timestamp]
