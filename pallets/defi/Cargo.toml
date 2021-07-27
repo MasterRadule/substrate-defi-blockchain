@@ -48,8 +48,19 @@ git = 'https://github.com/paritytech/substrate.git'
 tag = 'monthly-2021-07'
 version = '3.0.0'
 
+[dependencies.serde]
+version = "1.0.101"
+optional = true
+features = ["derive"]
+
+[dependencies.sp-std]
+default-features = false
+version = '3.0.0'
+git = 'https://github.com/paritytech/substrate.git'
+tag = 'monthly-2021-07'
+
 [dependencies.pallet-defi-rpc-runtime-api]
-version = "1.0.0"
+default-features = false
 path = "runtime-api"
 
 [features]
@@ -59,6 +70,10 @@ std = [
     'frame-support/std',
     'frame-system/std',
     'frame-benchmarking/std',
-    'codec/std'
+    'codec/std',
+    'serde',
+    'sp-runtime/std',
+    'sp-std/std',
+    'sp-core/std',
 ]
 try-runtime = ['frame-support/try-runtime']

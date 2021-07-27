@@ -10,9 +10,9 @@ license = "GPL-3.0-or-later"
 [dependencies]
 serde = { version = "1.0.101", features = ["derive"] }
 codec = { package = "parity-scale-codec", version = "2.0.0" }
-jsonrpc-core = "15.1.0"
-jsonrpc-core-client = "15.1.0"
-jsonrpc-derive = "15.1.0"
+jsonrpc-core = "15.0.0"
+jsonrpc-core-client = "15.0.0"
+jsonrpc-derive = "15.0.0"
 
 # Substrate packages
 
@@ -20,7 +20,9 @@ sp-api = { version = '3.0.0', git = 'https://github.com/paritytech/substrate.git
 sp-blockchain = { version = '3.0.0', git = 'https://github.com/paritytech/substrate.git', tag = 'monthly-2021-07' }
 sp-rpc = { version = '3.0.0', git = 'https://github.com/paritytech/substrate.git', tag = 'monthly-2021-07' }
 sp-runtime = { version = '3.0.0', git = 'https://github.com/paritytech/substrate.git', tag = 'monthly-2021-07' }
+sp-std = { version = '3.0.0', git = 'https://github.com/paritytech/substrate.git', tag = 'monthly-2021-07' }
+sp-core = { version = '3.0.0', git = 'https://github.com/paritytech/substrate.git', tag = 'monthly-2021-07' }
 
 # local packages
 
-pallet-defi-rpc-runtime-api = { version = "1.0.0", path = "../runtime-api" }
+pallet-defi-rpc-runtime-api = { path = "../runtime-api" }

@@ -15,7 +15,7 @@ pub trait DefiModuleAPI<
     BlockHash,
     AccountId,
     Balance,
-    BalanceInfo,
+    BalanceType,
 >
 {
     #[rpc(name = "defiModule_getBalance")]
@@ -23,7 +23,7 @@ pub trait DefiModuleAPI<
         &self,
         user: AccountId,
         at: Option<BlockHash>,
-    ) -> Result<BalanceInfo>;
+    ) -> Result<BalanceType>;
 }
 
 pub struct DefiModuleClient<C, B> {
@@ -69,7 +69,7 @@ impl<C, Block, AccountId, Balance> DefiModuleAPI
         C: HeaderBackend<Block>,
         C::Api: DefiRuntimeAPI<Block, AccountId, Balance>,
         AccountId: Codec,
-        Balance: Codec + MaybeDisplay + MaybeFromStr,
+        Balance: Codec + MaybeFromStr + MaybeDisplay,
 {
     fn get_balance(&self, user: AccountId, at: Option<<Block as BlockT>::Hash>) -> Result<BalanceInfo<Balance>> {
         let api = self.client.runtime_api();

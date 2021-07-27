@@ -21,7 +21,7 @@ version = '3.0.0'
 targets = ['x86_64-unknown-linux-gnu']
 
 [dependencies]
-jsonrpc-core = '15.1.0'
+jsonrpc-core = '15.0.0'
 structopt = '0.3.8'
 
 [dependencies.frame-benchmarking]
@@ -46,13 +46,13 @@ version = '3.0.0'
 [dependencies.sc-basic-authorship]
 git = 'https://github.com/paritytech/substrate.git'
 tag = 'monthly-2021-07'
-version = '0.9.0'
+version = '0.9'
 
 [dependencies.sc-cli]
 features = ['wasmtime']
 git = 'https://github.com/paritytech/substrate.git'
 tag = 'monthly-2021-07'
-version = '0.9.0'
+version = '0.9'
 
 [dependencies.sc-client-api]
 git = 'https://github.com/paritytech/substrate.git'
@@ -62,23 +62,23 @@ version = '3.0.0'
 [dependencies.sc-consensus]
 git = 'https://github.com/paritytech/substrate.git'
 tag = 'monthly-2021-07'
-version = '0.9.0'
+version = '0.9'
 
 [dependencies.sc-consensus-aura]
 git = 'https://github.com/paritytech/substrate.git'
 tag = 'monthly-2021-07'
-version = '0.9.0'
+version = '0.9'
 
 [dependencies.sc-executor]
 features = ['wasmtime']
 git = 'https://github.com/paritytech/substrate.git'
 tag = 'monthly-2021-07'
-version = '0.9.0'
+version = '0.9'
 
 [dependencies.sc-finality-grandpa]
 git = 'https://github.com/paritytech/substrate.git'
 tag = 'monthly-2021-07'
-version = '0.9.0'
+version = '0.9'
 
 [dependencies.sc-keystore]
 git = 'https://github.com/paritytech/substrate.git'
@@ -93,13 +93,13 @@ version = '3.0.0'
 [dependencies.sc-rpc-api]
 git = 'https://github.com/paritytech/substrate.git'
 tag = 'monthly-2021-07'
-version = '0.9.0'
+version = '0.9'
 
 [dependencies.sc-service]
 features = ['wasmtime']
 git = 'https://github.com/paritytech/substrate.git'
 tag = 'monthly-2021-07'
-version = '0.9.0'
+version = '0.9'
 
 [dependencies.sc-telemetry]
 git = 'https://github.com/paritytech/substrate.git'
@@ -129,12 +129,12 @@ version = '3.0.0'
 [dependencies.sp-consensus]
 git = 'https://github.com/paritytech/substrate.git'
 tag = 'monthly-2021-07'
-version = '0.9.0'
+version = '0.9'
 
 [dependencies.sp-consensus-aura]
 git = 'https://github.com/paritytech/substrate.git'
 tag = 'monthly-2021-07'
-version = '0.9.0'
+version = '0.9'
 
 [dependencies.sp-core]
 git = 'https://github.com/paritytech/substrate.git'
@@ -171,8 +171,28 @@ git = 'https://github.com/paritytech/substrate.git'
 tag = 'monthly-2021-07'
 version = '3.0.0'
 
+[dependencies.sp-std]
+version = '3.0.0'
+git = 'https://github.com/paritytech/substrate.git'
+tag = 'monthly-2021-07'
+
+[dependencies.serde]
+version = '1.0.101'
+features = ['derive']
+
+[dependencies.codec]
+package = "parity-scale-codec"
+version = "2.0.0"
+features = ["derive"]
+
+[dependencies.serde_json]
+version = '1.0.61'
+
 [dependencies.pallet-defi-rpc]
 path = '../pallets/defi/rpc'
+
+[dependencies.common]
+path = "../common"
 
 [[bin]]
 name = 'node-template'
