@@ -1,4 +1,5 @@
 #![cfg_attr(not(feature = "std"), no_std)]
+
 pub use pallet::*;
 use codec::{Decode, Encode};
 
@@ -14,14 +15,23 @@ mod benchmarking;
 #[derive(Encode, Decode, Default, PartialEq, Eq)]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct AddressInfo<Balance, BlockNumber> {
-    /// The balance of the account after last adjustment
+    /// The deposit balance of the account after last adjustment
     deposit_principal: Balance,
     /// The time (block height) at which the deposit balance was last adjusted
     deposit_date: BlockNumber,
-    /// Borrowed balance
+    /// The borrowing balance of the account after last adjustment
     borrow_principal: Balance,
     /// The time (block height) at which the borrowing balance was last adjusted
     borrow_date: BlockNumber,
+}
+
+#[derive(Encode, Decode, Default, PartialEq, Eq)]
+#[cfg_attr(feature = "std", derive(Debug))]
+pub struct BorrowingInfo<Balance> {
+    /// The borrowing balance
+    borrowing_balance: Balance,
+    /// User's allowed borrowing amount
+    allowed_borrowing_amount: Balance,
 }
 
 #[frame_support::pallet]
@@ -29,12 +39,12 @@ pub mod pallet {
     use frame_system::pallet_prelude::*;
     use frame_support::{dispatch::DispatchResult, pallet_prelude::*, PalletId};
     use frame_support::traits::{Currency, ReservableCurrency, ExistenceRequirement};
-    use crate::AddressInfo;
     use frame_support::sp_runtime::traits::{Saturating, Zero, One};
     use frame_support::sp_runtime::sp_std::convert::TryInto;
     use frame_support::sp_runtime::{FixedU128, FixedPointNumber, SaturatedConversion};
     use sp_runtime::traits::AccountIdConversion;
     use pallet_defi_rpc_runtime_api::BalanceInfo;
+    use crate::{AddressInfo, BorrowingInfo};
 
     const PALLET_ID: PalletId = PalletId(*b"defisrvc");
 
@@ -60,7 +70,7 @@ pub mod pallet {
     pub(super) type Accounts<T: Config> = StorageMap<_, Blake2_128Concat, AccountIdOf<T>, AddressInfo<BalanceOf<T>, T::BlockNumber>, ValueQuery>;
 
     #[pallet::event]
-    #[pallet::metadata(AccountIdOf<T> = "AccountId", BalanceOf<T> = "Balance", T::BlockNumber = "BlockNumber")]
+    #[pallet::metadata(AccountIdOf <T> = "AccountId", BalanceOf <T> = "Balance", T::BlockNumber = "BlockNumber")]
     #[pallet::generate_deposit(pub (super) fn deposit_event)]
     pub enum Event<T: Config> {
         /// Funds deposited. [who, amount, block]
@@ -69,12 +79,12 @@ pub mod pallet {
         Withdrawn(AccountIdOf<T>, BalanceOf<T>, T::BlockNumber),
         /// Loan repaid. [who, amount, block]
         LoanRepaid(AccountIdOf<T>, BalanceOf<T>, T::BlockNumber),
+        /// Funds borrowed. [who, amount, block]
+        Borrowed(AccountIdOf<T>, BalanceOf<T>, T::BlockNumber),
     }
 
     #[pallet::error]
     pub enum Error<T> {
-        /// User's borrowed amount is not zero
-        UserInDebt,
         /// User has no deposited balance
         NoFundsDeposited,
         /// Pallet has not enough funds to pay the user
@@ -82,7 +92,9 @@ pub mod pallet {
         /// User has not as much funds as he asked for
         UserHasNotEnoughFunds,
         /// Repay amount greater than borrowed amount
-        RepayOverflow
+        RepayOverflow,
+        /// Unallowed borrow amount
+        UnallowedBorrowAmount,
     }
 
     #[pallet::call]
@@ -94,10 +106,10 @@ pub mod pallet {
             // This function will return an error if the extrinsic is not signed.
             let user = ensure_signed(origin)?;
 
-            // Get account info of extrinsic caller and check if it has borrowed funds
-            let mut account_info = <Accounts<T>>::get(&user);
-            ensure!(account_info.borrow_principal == <BalanceOf<T>>::zero(), Error::<T>::UserInDebt);
+            // Get address info of extrinsic caller
+            let mut address_info = <Accounts<T>>::get(&user);
 
+            // Get current block
             let current_block = frame_system::Pallet::<T>::block_number();
 
             // Deposit funds to pallet
@@ -108,12 +120,12 @@ pub mod pallet {
                 ExistenceRequirement::AllowDeath,
             )?;
 
-            // Set account info
-            account_info.deposit_principal += amount;
-            account_info.deposit_date = current_block;
+            // Set address info
+            address_info.deposit_principal += amount;
+            address_info.deposit_date = current_block;
 
-            // Put updated account info into storage
-            <Accounts<T>>::insert(&user, account_info);
+            // Put updated address info into storage
+            <Accounts<T>>::insert(&user, address_info);
 
             // Emit an event
             Self::deposit_event(Event::Deposited(user, amount, current_block));
@@ -125,17 +137,20 @@ pub mod pallet {
         /// Withdraw funds
         #[pallet::weight(10_000 + T::DbWeight::get().writes(1))]
         pub fn withdraw(origin: OriginFor<T>, amount: BalanceOf<T>) -> DispatchResult {
+            // Check that the extrinsic was signed and get the signer.
+            // This function will return an error if the extrinsic is not signed.
             let user = ensure_signed(origin)?;
 
-            // Get account info of extrinsic caller and check if it has deposited funds
-            let mut account_info = <Accounts<T>>::get(&user);
-            ensure!(account_info.deposit_principal != <BalanceOf<T>>::zero(), Error::<T>::NoFundsDeposited);
+            // Get address info of extrinsic caller and check if it has deposited funds
+            let mut address_info = <Accounts<T>>::get(&user);
+            ensure!(address_info.deposit_principal != <BalanceOf<T>>::zero(), Error::<T>::NoFundsDeposited);
 
             // Check if user and pallet have enough funds
             let balance_info = Self::get_balance(user.clone());
             ensure!(amount <= balance_info.balance, Error::<T>::UserHasNotEnoughFunds);
             ensure!(amount <= T::Currency::free_balance(&Self::account_id()), Error::<T>::PalletHasNotEnoughFunds);
 
+            // Get current block
             let current_block = frame_system::Pallet::<T>::block_number();
 
             // Withdraw funds from pallet
@@ -146,12 +161,12 @@ pub mod pallet {
                 ExistenceRequirement::AllowDeath,
             )?;
 
-            // Update account info
-            account_info.deposit_principal -= amount;
-            account_info.deposit_date = current_block;
+            // Update address info
+            address_info.deposit_principal -= amount;
+            address_info.deposit_date = current_block;
 
-            // Put updated account info into storage
-            <Accounts<T>>::insert(&user, account_info);
+            // Put updated address info into storage
+            <Accounts<T>>::insert(&user, address_info);
 
             // Emit an event
             Self::deposit_event(Event::Withdrawn(user, amount, current_block));
@@ -160,22 +175,66 @@ pub mod pallet {
             Ok(())
         }
 
+        /// Borrow funds
+        #[pallet::weight(10_000 + T::DbWeight::get().writes(1))]
+        pub fn borrow(origin: OriginFor<T>, amount: BalanceOf<T>) -> DispatchResult {
+            // Check that the extrinsic was signed and get the signer.
+            // This function will return an error if the extrinsic is not signed.
+            let user = ensure_signed(origin)?;
+
+            // Check if pallet has enough funds
+            ensure!(amount <= T::Currency::free_balance(&Self::account_id()), Error::<T>::PalletHasNotEnoughFunds);
+
+            // Get address info of extrinsic caller
+            let mut address_info = <Accounts<T>>::get(&user);
+
+            // Get allowed borrowing amount
+            let borrowing_info = Self::get_allowed_borrowing_amount(user.clone(), &address_info);
+            ensure!(amount <= borrowing_info.allowed_borrowing_amount, Error::<T>::UnallowedBorrowAmount);
+
+            // Get current block
+            let current_block = frame_system::Pallet::<T>::block_number();
+
+            // Borrow funds from pallet
+            T::Currency::transfer(
+                &Self::account_id(),
+                &user,
+                amount,
+                ExistenceRequirement::AllowDeath,
+            )?;
+
+            // Update address info
+            address_info.borrow_principal = borrowing_info.borrowing_balance + amount;
+            address_info.borrow_date = current_block;
+
+            // Put updated address info into storage
+            <Accounts<T>>::insert(&user, address_info);
+
+            // Emit an event
+            Self::deposit_event(Event::Borrowed(user, amount, current_block));
+
+            // Return a successful DispatchResult
+            Ok(())
+        }
+
         /// Repay loan
         #[pallet::weight(10_000 + T::DbWeight::get().writes(1))]
         pub fn repay(origin: OriginFor<T>, amount: BalanceOf<T>) -> DispatchResult {
+            // Check that the extrinsic was signed and get the signer.
+            // This function will return an error if the extrinsic is not signed.
             let user = ensure_signed(origin)?;
 
-            // Get account info of extrinsic caller
-            let mut account_info = <Accounts<T>>::get(&user);
+            // Get address info of extrinsic caller
+            let mut address_info = <Accounts<T>>::get(&user);
 
             // Check if there is repay overflow
             let balance_info = Self::get_loan(user.clone());
-            ensure!(balance_info.balance >= amount, Error::<T>::RepayOverflow);
+            ensure!(amount <= balance_info.balance, Error::<T>::RepayOverflow);
 
             // Get principal with accrued interest
             let current_block = frame_system::Pallet::<T>::block_number();
 
-            // Withdraw funds from pallet
+            // Transfer funds from user to pallet
             T::Currency::transfer(
                 &user,
                 &Self::account_id(),
@@ -183,12 +242,12 @@ pub mod pallet {
                 ExistenceRequirement::AllowDeath,
             )?;
 
-            // Update account info
-            account_info.borrow_principal = balance_info.balance - amount;
-            account_info.borrow_date = current_block;
+            // Update address info
+            address_info.borrow_principal = balance_info.balance - amount;
+            address_info.borrow_date = current_block;
 
-            // Put updated account info into storage
-            <Accounts<T>>::insert(&user, account_info);
+            // Put updated address info into storage
+            <Accounts<T>>::insert(&user, address_info);
 
             // Emit an event
             Self::deposit_event(Event::LoanRepaid(user, amount, current_block));
@@ -199,38 +258,51 @@ pub mod pallet {
     }
 
     impl<T: Config> Pallet<T> {
-        /// The account ID of pallet
-        fn account_id() -> T::AccountId {
-            PALLET_ID.into_account()
-        }
-
-        /// Get user's current balance
+        /// Get user's balance
         pub fn get_balance(user: T::AccountId) -> BalanceInfo<BalanceOf<T>> {
-            let account_info = <Accounts<T>>::get(user);
-            if account_info.deposit_principal == <BalanceOf<T>>::zero() {
-                return BalanceInfo{ balance: <BalanceOf<T>>::zero() };
+            // Get address info and check if deposit principal is zero
+            let address_info = <Accounts<T>>::get(user);
+            if address_info.deposit_principal == <BalanceOf<T>>::zero() {
+                return BalanceInfo { balance: <BalanceOf<T>>::zero() };
             }
 
             // Calculate principal with accrued interest
             let current_block = frame_system::Pallet::<T>::block_number();
-            let balance = Self::get_principal_with_accrued_interest(current_block, account_info.deposit_date, account_info.deposit_principal);
+            let balance = Self::get_principal_with_accrued_interest(current_block, address_info.deposit_date, address_info.deposit_principal);
 
-            return BalanceInfo{balance};
+            return BalanceInfo { balance };
         }
 
+        /// Get user's loan
         pub fn get_loan(user: T::AccountId) -> BalanceInfo<BalanceOf<T>> {
-            let account_info = <Accounts<T>>::get(user);
-            if account_info.borrow_principal == <BalanceOf<T>>::zero() {
-                return BalanceInfo{ balance: <BalanceOf<T>>::zero() };
+            // Get address info and check if borrow principal is zero
+            let address_info = <Accounts<T>>::get(user);
+            if address_info.borrow_principal == <BalanceOf<T>>::zero() {
+                return BalanceInfo { balance: <BalanceOf<T>>::zero() };
             }
 
             // Calculate elapsed blocks
             let current_block = frame_system::Pallet::<T>::block_number();
-            let balance = Self::get_principal_with_accrued_interest(current_block, account_info.borrow_date, account_info.borrow_principal);
+            let balance = Self::get_principal_with_accrued_interest(current_block, address_info.borrow_date, address_info.borrow_principal);
 
-            return BalanceInfo{balance};
+            return BalanceInfo { balance };
         }
 
+        /// Get user's allowed borrowing amount
+        pub fn get_allowed_borrowing_amount(user: T::AccountId, address_info: &AddressInfo<BalanceOf<T>, T::BlockNumber>) -> BorrowingInfo<BalanceOf<T>> {
+            // Get borrowing balance and deposit principal
+            let borrowing_info = Self::get_loan(user.clone());
+            let deposit_principal = FixedU128::from_inner(address_info.deposit_principal.saturated_into::<u128>());
+            let borrowing_balance = FixedU128::from_inner(borrowing_info.balance.saturated_into::<u128>());
+
+            // Calculate allowed borrowing amount
+            let allowed_borrowing_amount = (deposit_principal.saturating_mul(FixedU128::from_inner(75) / FixedU128::from_inner(100))
+                .saturating_sub(borrowing_balance)).into_inner().saturated_into();
+
+            return BorrowingInfo { borrowing_balance: borrowing_info.balance, allowed_borrowing_amount };
+        }
+
+        /// Get principal with accrued interest
         fn get_principal_with_accrued_interest(current_block: T::BlockNumber, date: T::BlockNumber, principal: BalanceOf<T>) -> BalanceOf<T> {
             // Calculate elapsed blocks
             let elapsed_time_block_number = current_block - date;
@@ -244,6 +316,11 @@ pub mod pallet {
             let principal_fixed = FixedU128::from_inner(principal.saturated_into::<u128>());
 
             return principal_fixed.saturating_add(principal_fixed.saturating_mul(multiplier)).into_inner().saturated_into();
+        }
+
+        /// The account ID of pallet
+        fn account_id() -> T::AccountId {
+            PALLET_ID.into_account()
         }
     }
 }
