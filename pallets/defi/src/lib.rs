@@ -25,15 +25,6 @@ pub struct AddressInfo<Balance, BlockNumber> {
     borrow_date: BlockNumber,
 }
 
-#[derive(Encode, Decode, Default, PartialEq, Eq)]
-#[cfg_attr(feature = "std", derive(Debug))]
-pub struct BorrowingInfo<Balance> {
-    /// The borrowing balance
-    borrowing_balance: Balance,
-    /// User's allowed borrowing amount
-    allowed_borrowing_amount: Balance,
-}
-
 #[frame_support::pallet]
 pub mod pallet {
     use frame_system::pallet_prelude::*;
@@ -43,8 +34,8 @@ pub mod pallet {
     use frame_support::sp_runtime::sp_std::convert::TryInto;
     use frame_support::sp_runtime::{FixedU128, FixedPointNumber, SaturatedConversion};
     use sp_runtime::traits::AccountIdConversion;
-    use pallet_defi_rpc_runtime_api::BalanceInfo;
-    use crate::{AddressInfo, BorrowingInfo};
+    use pallet_defi_rpc_runtime_api::{BalanceInfo, BorrowingInfo};
+    use crate::AddressInfo;
 
     const PALLET_ID: PalletId = PalletId(*b"defisrvc");
 
@@ -189,7 +180,7 @@ pub mod pallet {
             let mut address_info = <Accounts<T>>::get(&user);
 
             // Get allowed borrowing amount
-            let borrowing_info = Self::get_allowed_borrowing_amount(user.clone(), &address_info);
+            let borrowing_info = Self::get_allowed_borrowing_amount(user.clone());
             ensure!(amount <= borrowing_info.allowed_borrowing_amount, Error::<T>::UnallowedBorrowAmount);
 
             // Get current block
@@ -228,7 +219,7 @@ pub mod pallet {
             let mut address_info = <Accounts<T>>::get(&user);
 
             // Check if there is repay overflow
-            let balance_info = Self::get_loan(user.clone());
+            let balance_info = Self::get_debt(user.clone());
             ensure!(amount <= balance_info.balance, Error::<T>::RepayOverflow);
 
             // Get principal with accrued interest
@@ -273,8 +264,8 @@ pub mod pallet {
             return BalanceInfo { balance };
         }
 
-        /// Get user's loan
-        pub fn get_loan(user: T::AccountId) -> BalanceInfo<BalanceOf<T>> {
+        /// Get user's debt
+        pub fn get_debt(user: T::AccountId) -> BalanceInfo<BalanceOf<T>> {
             // Get address info and check if borrow principal is zero
             let address_info = <Accounts<T>>::get(user);
             if address_info.borrow_principal == <BalanceOf<T>>::zero() {
@@ -289,9 +280,10 @@ pub mod pallet {
         }
 
         /// Get user's allowed borrowing amount
-        pub fn get_allowed_borrowing_amount(user: T::AccountId, address_info: &AddressInfo<BalanceOf<T>, T::BlockNumber>) -> BorrowingInfo<BalanceOf<T>> {
+        pub fn get_allowed_borrowing_amount(user: T::AccountId) -> BorrowingInfo<BalanceOf<T>> {
             // Get borrowing balance and deposit principal
-            let borrowing_info = Self::get_loan(user.clone());
+            let address_info = <Accounts<T>>::get(&user);
+            let borrowing_info = Self::get_debt(user.clone());
             let deposit_principal = FixedU128::from_inner(address_info.deposit_principal.saturated_into::<u128>());
             let borrowing_balance = FixedU128::from_inner(borrowing_info.balance.saturated_into::<u128>());
 

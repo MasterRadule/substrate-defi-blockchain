@@ -448,6 +448,12 @@ impl_runtime_apis! {
 		fn get_balance(user: AccountId) -> pallet_defi_rpc_runtime_api::BalanceInfo<Balance> {
 			DefiModule::get_balance(user)
 		}
+		fn get_debt(user: AccountId) -> pallet_defi_rpc_runtime_api::BalanceInfo<Balance> {
+			DefiModule::get_debt(user)
+		}
+		fn get_allowed_borrowing_amount(user: AccountId) -> pallet_defi_rpc_runtime_api::BorrowingInfo<Balance> {
+			DefiModule::get_allowed_borrowing_amount(user)
+		}
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]

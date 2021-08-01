@@ -8,7 +8,7 @@ use sp_runtime::generic::BlockId;
 use jsonrpc_derive::rpc;
 
 pub use pallet_defi_rpc_runtime_api::DefiModuleAPI as DefiRuntimeAPI;
-use pallet_defi_rpc_runtime_api::BalanceInfo;
+use pallet_defi_rpc_runtime_api::{BalanceInfo, BorrowingInfo};
 
 #[rpc]
 pub trait DefiModuleAPI<
@@ -16,6 +16,7 @@ pub trait DefiModuleAPI<
     AccountId,
     Balance,
     BalanceType,
+    BorrowingType,
 >
 {
     #[rpc(name = "defiModule_getBalance")]
@@ -24,6 +25,20 @@ pub trait DefiModuleAPI<
         user: AccountId,
         at: Option<BlockHash>,
     ) -> Result<BalanceType>;
+
+    #[rpc(name = "defiModule_getDebt")]
+    fn get_debt(
+        &self,
+        user: AccountId,
+        at: Option<BlockHash>,
+    ) -> Result<BalanceType>;
+
+    #[rpc(name = "defiModule_getAllowedBorrowingAmount")]
+    fn get_allowed_borrowing_amount(
+        &self,
+        user: AccountId,
+        at: Option<BlockHash>,
+    ) -> Result<BorrowingType>;
 }
 
 pub struct DefiModuleClient<C, B> {
@@ -61,6 +76,7 @@ impl<C, Block, AccountId, Balance> DefiModuleAPI
     AccountId,
     Balance,
     BalanceInfo<Balance>,
+    BorrowingInfo<Balance>
 > for DefiModuleClient<C, Block>
     where
         Block: BlockT,
@@ -81,6 +97,34 @@ impl<C, Block, AccountId, Balance> DefiModuleAPI
             .map_err(|e| RpcError {
                 code: ErrorCode::ServerError(Error::RuntimeError.into()),
                 message: "Unable to get balance.".into(),
+                data: Some(format!("{:?}", e).into()),
+            })
+    }
+
+    fn get_debt(&self, user: AccountId, at: Option<<Block as BlockT>::Hash>) -> Result<BalanceInfo<Balance>> {
+        let api = self.client.runtime_api();
+        let at = BlockId::hash(at.unwrap_or(
+            // If the block hash is not supplied assume the best block.
+            self.client.info().best_hash,
+        ));
+        api.get_debt(&at, user)
+            .map_err(|e| RpcError {
+                code: ErrorCode::ServerError(Error::RuntimeError.into()),
+                message: "Unable to get debt.".into(),
+                data: Some(format!("{:?}", e).into()),
+            })
+    }
+
+    fn get_allowed_borrowing_amount(&self, user: AccountId, at: Option<<Block as BlockT>::Hash>) -> Result<BorrowingInfo<Balance>> {
+        let api = self.client.runtime_api();
+        let at = BlockId::hash(at.unwrap_or(
+            // If the block hash is not supplied assume the best block.
+            self.client.info().best_hash,
+        ));
+        api.get_allowed_borrowing_amount(&at, user)
+            .map_err(|e| RpcError {
+                code: ErrorCode::ServerError(Error::RuntimeError.into()),
+                message: "Unable to get allowed borrowing amount".into(),
                 data: Some(format!("{:?}", e).into()),
             })
     }
