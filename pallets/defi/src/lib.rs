@@ -47,6 +47,15 @@ pub mod pallet {
 
         /// The currency in which deposit/borrowing work
         type Currency: ReservableCurrency<Self::AccountId>;
+
+        /// Deposit rate
+        type DepositRate: Get<FixedU128>;
+
+        /// Borrowing rate
+        type BorrowingRate: Get<FixedU128>;
+
+        /// Number of blocks on daily basis
+        type NumberOfBlocksDaily: Get<u32>;
     }
 
     type AccountIdOf<T> = <T as frame_system::Config>::AccountId;
@@ -259,7 +268,7 @@ pub mod pallet {
 
             // Calculate principal with accrued interest
             let current_block = frame_system::Pallet::<T>::block_number();
-            let balance = Self::get_principal_with_accrued_interest(current_block, address_info.deposit_date, address_info.deposit_principal);
+            let balance = Self::get_principal_with_accrued_interest(current_block, address_info.deposit_date, address_info.deposit_principal, T::DepositRate::get());
 
             return BalanceInfo { balance };
         }
@@ -274,7 +283,7 @@ pub mod pallet {
 
             // Calculate elapsed blocks
             let current_block = frame_system::Pallet::<T>::block_number();
-            let balance = Self::get_principal_with_accrued_interest(current_block, address_info.borrow_date, address_info.borrow_principal);
+            let balance = Self::get_principal_with_accrued_interest(current_block, address_info.borrow_date, address_info.borrow_principal, T::BorrowingRate::get());
 
             return BalanceInfo { balance };
         }
@@ -294,8 +303,22 @@ pub mod pallet {
             return BorrowingInfo { borrowing_balance: borrowing_info.balance, allowed_borrowing_amount };
         }
 
+        /// Get deposit APY
+        pub fn get_deposit_apy() -> BalanceInfo<BalanceOf<T>> {
+            let deposit_apy = (FixedU128::one() + T::DepositRate::get()).saturating_pow(T::NumberOfBlocksDaily::get() as usize).saturating_sub(FixedU128::one());
+
+            return BalanceInfo{balance: deposit_apy.into_inner().saturated_into()};
+        }
+
+        /// Get borrowing APY
+        pub fn get_borrowing_apy() -> BalanceInfo<BalanceOf<T>> {
+            let borrowing_apy = (FixedU128::one() + T::BorrowingRate::get()).saturating_pow(T::NumberOfBlocksDaily::get() as usize).saturating_sub(FixedU128::one());
+
+            return BalanceInfo{balance: borrowing_apy.into_inner().saturated_into()};
+        }
+
         /// Get principal with accrued interest
-        fn get_principal_with_accrued_interest(current_block: T::BlockNumber, date: T::BlockNumber, principal: BalanceOf<T>) -> BalanceOf<T> {
+        fn get_principal_with_accrued_interest(current_block: T::BlockNumber, date: T::BlockNumber, principal: BalanceOf<T>, rate: FixedU128) -> BalanceOf<T> {
             // Calculate elapsed blocks
             let elapsed_time_block_number = current_block - date;
             let elapsed_time: u32 = TryInto::try_into(elapsed_time_block_number)
@@ -303,7 +326,6 @@ pub mod pallet {
                 .expect("blockchain will not exceed 2^32 blocks; qed");
 
             // Calculate principal with accrued interest
-            let rate = FixedU128::from_inner(5) / FixedU128::from_inner(100);
             let multiplier = (FixedU128::one() + rate).saturating_pow(elapsed_time as usize).saturating_sub(FixedU128::one());
             let principal_fixed = FixedU128::from_inner(principal.saturated_into::<u128>());
 

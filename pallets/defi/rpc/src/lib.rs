@@ -39,6 +39,18 @@ pub trait DefiModuleAPI<
         user: AccountId,
         at: Option<BlockHash>,
     ) -> Result<BorrowingType>;
+
+    #[rpc(name = "defiModule_getDepositAPY")]
+    fn get_deposit_apy(
+        &self,
+        at: Option<BlockHash>,
+    ) -> Result<BalanceType>;
+
+    #[rpc(name = "defiModule_getBorrowingAPY")]
+    fn get_borrowing_apy(
+        &self,
+        at: Option<BlockHash>,
+    ) -> Result<BalanceType>;
 }
 
 pub struct DefiModuleClient<C, B> {
@@ -125,6 +137,34 @@ impl<C, Block, AccountId, Balance> DefiModuleAPI
             .map_err(|e| RpcError {
                 code: ErrorCode::ServerError(Error::RuntimeError.into()),
                 message: "Unable to get allowed borrowing amount".into(),
+                data: Some(format!("{:?}", e).into()),
+            })
+    }
+
+    fn get_deposit_apy(&self, at: Option<<Block as BlockT>::Hash>) -> Result<BalanceInfo<Balance>> {
+        let api = self.client.runtime_api();
+        let at = BlockId::hash(at.unwrap_or(
+            // If the block hash is not supplied assume the best block.
+            self.client.info().best_hash,
+        ));
+        api.get_deposit_apy(&at)
+            .map_err(|e| RpcError {
+                code: ErrorCode::ServerError(Error::RuntimeError.into()),
+                message: "Unable to get allowed deposit APY".into(),
+                data: Some(format!("{:?}", e).into()),
+            })
+    }
+
+    fn get_borrowing_apy(&self, at: Option<<Block as BlockT>::Hash>) -> Result<BalanceInfo<Balance>> {
+        let api = self.client.runtime_api();
+        let at = BlockId::hash(at.unwrap_or(
+            // If the block hash is not supplied assume the best block.
+            self.client.info().best_hash,
+        ));
+        api.get_borrowing_apy(&at)
+            .map_err(|e| RpcError {
+                code: ErrorCode::ServerError(Error::RuntimeError.into()),
+                message: "Unable to get borrowing APY".into(),
                 data: Some(format!("{:?}", e).into()),
             })
     }

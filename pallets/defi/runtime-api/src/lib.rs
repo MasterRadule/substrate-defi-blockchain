@@ -64,5 +64,7 @@ sp_api::decl_runtime_apis! {
 		fn get_balance(user: AccountId) -> BalanceInfo<Balance>;
 		fn get_debt(user: AccountId) -> BalanceInfo<Balance>;
 		fn get_allowed_borrowing_amount(user: AccountId) -> BorrowingInfo<Balance>;
+		fn get_deposit_apy() -> BalanceInfo<Balance>;
+		fn get_borrowing_apy() -> BalanceInfo<Balance>;
 	}
 }
