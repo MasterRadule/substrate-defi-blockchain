@@ -8,7 +8,7 @@ use sp_runtime::generic::BlockId;
 use jsonrpc_derive::rpc;
 
 pub use pallet_defi_rpc_runtime_api::DefiModuleAPI as DefiRuntimeAPI;
-use pallet_defi_rpc_runtime_api::{BalanceInfo, BorrowingInfo};
+use pallet_defi_rpc_runtime_api::{BalanceInfo};
 
 #[rpc]
 pub trait DefiModuleAPI<
@@ -16,7 +16,6 @@ pub trait DefiModuleAPI<
     AccountId,
     Balance,
     BalanceType,
-    BorrowingType,
 >
 {
     #[rpc(name = "defiModule_getBalance")]
@@ -38,7 +37,7 @@ pub trait DefiModuleAPI<
         &self,
         user: AccountId,
         at: Option<BlockHash>,
-    ) -> Result<BorrowingType>;
+    ) -> Result<BalanceType>;
 
     #[rpc(name = "defiModule_getDepositAPY")]
     fn get_deposit_apy(
@@ -88,7 +87,6 @@ impl<C, Block, AccountId, Balance> DefiModuleAPI
     AccountId,
     Balance,
     BalanceInfo<Balance>,
-    BorrowingInfo<Balance>
 > for DefiModuleClient<C, Block>
     where
         Block: BlockT,
@@ -127,7 +125,7 @@ impl<C, Block, AccountId, Balance> DefiModuleAPI
             })
     }
 
-    fn get_allowed_borrowing_amount(&self, user: AccountId, at: Option<<Block as BlockT>::Hash>) -> Result<BorrowingInfo<Balance>> {
+    fn get_allowed_borrowing_amount(&self, user: AccountId, at: Option<<Block as BlockT>::Hash>) -> Result<BalanceInfo<Balance>> {
         let api = self.client.runtime_api();
         let at = BlockId::hash(at.unwrap_or(
             // If the block hash is not supplied assume the best block.

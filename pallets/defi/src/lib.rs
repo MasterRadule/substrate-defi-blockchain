@@ -34,7 +34,7 @@ pub mod pallet {
     use frame_support::sp_runtime::sp_std::convert::TryInto;
     use frame_support::sp_runtime::{FixedU128, FixedPointNumber, SaturatedConversion};
     use sp_runtime::traits::AccountIdConversion;
-    use pallet_defi_rpc_runtime_api::{BalanceInfo, BorrowingInfo};
+    use pallet_defi_rpc_runtime_api::{BalanceInfo};
     use crate::AddressInfo;
 
     const PALLET_ID: PalletId = PalletId(*b"defisrvc");
@@ -54,8 +54,8 @@ pub mod pallet {
         /// Borrowing rate
         type BorrowingRate: Get<FixedU128>;
 
-        /// Number of blocks on daily basis
-        type NumberOfBlocksDaily: Get<u32>;
+        /// Number of blocks on yearly basis
+        type NumberOfBlocksYearly: Get<u32>;
     }
 
     type AccountIdOf<T> = <T as frame_system::Config>::AccountId;
@@ -91,8 +91,6 @@ pub mod pallet {
         PalletHasNotEnoughFunds,
         /// User has not as much funds as he asked for
         UserHasNotEnoughFunds,
-        /// Repay amount greater than borrowed amount
-        RepayOverflow,
         /// Unallowed borrow amount
         UnallowedBorrowAmount,
     }
@@ -121,7 +119,9 @@ pub mod pallet {
             )?;
 
             // Set address info
-            address_info.deposit_principal += amount;
+            let deposit_principal_fixed = FixedU128::from_inner(address_info.deposit_principal.saturated_into::<u128>());
+            let amount_fixed = FixedU128::from_inner(amount.saturated_into::<u128>());
+            address_info.deposit_principal = deposit_principal_fixed.saturating_add(amount_fixed).into_inner().saturated_into();
             address_info.deposit_date = current_block;
 
             // Put updated address info into storage
@@ -162,7 +162,9 @@ pub mod pallet {
             )?;
 
             // Update address info
-            address_info.deposit_principal -= amount;
+            let deposit_principal_fixed = FixedU128::from_inner(address_info.deposit_principal.saturated_into::<u128>());
+            let amount_fixed = FixedU128::from_inner(amount.saturated_into::<u128>());
+            address_info.deposit_principal = deposit_principal_fixed.saturating_sub(amount_fixed).into_inner().saturated_into();
             address_info.deposit_date = current_block;
 
             // Put updated address info into storage
@@ -189,8 +191,9 @@ pub mod pallet {
             let mut address_info = <Accounts<T>>::get(&user);
 
             // Get allowed borrowing amount
-            let borrowing_info = Self::get_allowed_borrowing_amount(user.clone());
-            ensure!(amount <= borrowing_info.allowed_borrowing_amount, Error::<T>::UnallowedBorrowAmount);
+            let borrowing_balance = Self::get_debt(user.clone());
+            let borrowing_info = Self::get_allowed_borrowing_amount(user.clone(), borrowing_balance.balance, false);
+            ensure!(amount <= borrowing_info.balance, Error::<T>::UnallowedBorrowAmount);
 
             // Get current block
             let current_block = frame_system::Pallet::<T>::block_number();
@@ -204,7 +207,9 @@ pub mod pallet {
             )?;
 
             // Update address info
-            address_info.borrow_principal = borrowing_info.borrowing_balance + amount;
+            let borrowing_balance_fixed = FixedU128::from_inner(borrowing_balance.balance.saturated_into::<u128>());
+            let amount_fixed = FixedU128::from_inner(amount.saturated_into::<u128>());
+            address_info.borrow_principal = borrowing_balance_fixed.saturating_add(amount_fixed).into_inner().saturated_into();
             address_info.borrow_date = current_block;
 
             // Put updated address info into storage
@@ -219,7 +224,7 @@ pub mod pallet {
 
         /// Repay loan
         #[pallet::weight(10_000 + T::DbWeight::get().writes(1))]
-        pub fn repay(origin: OriginFor<T>, amount: BalanceOf<T>) -> DispatchResult {
+        pub fn repay(origin: OriginFor<T>, mut amount: BalanceOf<T>) -> DispatchResult {
             // Check that the extrinsic was signed and get the signer.
             // This function will return an error if the extrinsic is not signed.
             let user = ensure_signed(origin)?;
@@ -229,7 +234,9 @@ pub mod pallet {
 
             // Check if there is repay overflow
             let balance_info = Self::get_debt(user.clone());
-            ensure!(amount <= balance_info.balance, Error::<T>::RepayOverflow);
+            if amount > balance_info.balance {
+                amount = balance_info.balance;
+            }
 
             // Get principal with accrued interest
             let current_block = frame_system::Pallet::<T>::block_number();
@@ -243,7 +250,9 @@ pub mod pallet {
             )?;
 
             // Update address info
-            address_info.borrow_principal = balance_info.balance - amount;
+            let balance_fixed = FixedU128::from_inner(balance_info.balance.saturated_into::<u128>());
+            let amount_fixed = FixedU128::from_inner(amount.saturated_into::<u128>());
+            address_info.borrow_principal = balance_fixed.saturating_sub(amount_fixed).into_inner().saturated_into();
             address_info.borrow_date = current_block;
 
             // Put updated address info into storage
@@ -289,30 +298,33 @@ pub mod pallet {
         }
 
         /// Get user's allowed borrowing amount
-        pub fn get_allowed_borrowing_amount(user: T::AccountId) -> BorrowingInfo<BalanceOf<T>> {
+        pub fn get_allowed_borrowing_amount(user: T::AccountId, mut borrowing_balance: BalanceOf<T>, is_rpc: bool) -> BalanceInfo<BalanceOf<T>> {
             // Get borrowing balance and deposit principal
-            let address_info = <Accounts<T>>::get(&user);
-            let borrowing_info = Self::get_debt(user.clone());
-            let deposit_principal = FixedU128::from_inner(address_info.deposit_principal.saturated_into::<u128>());
-            let borrowing_balance = FixedU128::from_inner(borrowing_info.balance.saturated_into::<u128>());
+            let deposit_balance = Self::get_balance(user.clone()).balance;
+            if is_rpc {
+                borrowing_balance = Self::get_debt(user.clone()).balance;
+            }
+
+            let deposit_balance_fixed = FixedU128::from_inner(deposit_balance.saturated_into::<u128>());
+            let borrowing_balance_fixed = FixedU128::from_inner(borrowing_balance.saturated_into::<u128>());
 
             // Calculate allowed borrowing amount
-            let allowed_borrowing_amount = (deposit_principal.saturating_mul(FixedU128::from_inner(75) / FixedU128::from_inner(100))
-                .saturating_sub(borrowing_balance)).into_inner().saturated_into();
+            let allowed_borrowing_amount = (deposit_balance_fixed.saturating_mul(FixedU128::from_inner(75) / FixedU128::from_inner(100))
+                .saturating_sub(borrowing_balance_fixed)).into_inner().saturated_into();
 
-            return BorrowingInfo { borrowing_balance: borrowing_info.balance, allowed_borrowing_amount };
+            return BalanceInfo { balance: allowed_borrowing_amount };
         }
 
         /// Get deposit APY
         pub fn get_deposit_apy() -> BalanceInfo<BalanceOf<T>> {
-            let deposit_apy = (FixedU128::one() + T::DepositRate::get()).saturating_pow(T::NumberOfBlocksDaily::get() as usize).saturating_sub(FixedU128::one());
+            let deposit_apy = (FixedU128::one().saturating_add(T::DepositRate::get())).saturating_pow(T::NumberOfBlocksYearly::get() as usize).saturating_sub(FixedU128::one());
 
             return BalanceInfo{balance: deposit_apy.into_inner().saturated_into()};
         }
 
         /// Get borrowing APY
         pub fn get_borrowing_apy() -> BalanceInfo<BalanceOf<T>> {
-            let borrowing_apy = (FixedU128::one() + T::BorrowingRate::get()).saturating_pow(T::NumberOfBlocksDaily::get() as usize).saturating_sub(FixedU128::one());
+            let borrowing_apy = (FixedU128::one().saturating_add(T::BorrowingRate::get())).saturating_pow(T::NumberOfBlocksYearly::get() as usize).saturating_sub(FixedU128::one());
 
             return BalanceInfo{balance: borrowing_apy.into_inner().saturated_into()};
         }
@@ -326,7 +338,7 @@ pub mod pallet {
                 .expect("blockchain will not exceed 2^32 blocks; qed");
 
             // Calculate principal with accrued interest
-            let multiplier = (FixedU128::one() + rate).saturating_pow(elapsed_time as usize).saturating_sub(FixedU128::one());
+            let multiplier = (FixedU128::one().saturating_add(rate)).saturating_pow(elapsed_time as usize).saturating_sub(FixedU128::one());
             let principal_fixed = FixedU128::from_inner(principal.saturated_into::<u128>());
 
             return principal_fixed.saturating_add(principal_fixed.saturating_mul(multiplier)).into_inner().saturated_into();

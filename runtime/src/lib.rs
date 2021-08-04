@@ -267,9 +267,9 @@ impl pallet_sudo::Config for Runtime {
 }
 
 parameter_types! {
-	pub DepositRate: FixedU128 = FixedU128::from_inner(3) / FixedU128::from_inner(1000);
-	pub BorrowingRate: FixedU128 = FixedU128::from_inner(32) / FixedU128::from_inner(10000);
-	pub const NumberOfBlocksDaily: u32 = 14400;
+	pub DepositRate: FixedU128 = FixedU128::from_inner(92828) / FixedU128::from_inner(10000000000000);
+	pub BorrowingRate: FixedU128 = FixedU128::from_inner(128727) / FixedU128::from_inner(10000000000000);
+	pub const NumberOfBlocksYearly: u32 = 5256000;
 }
 
 /// Configure the pallet-defi in pallets/defi.
@@ -278,7 +278,7 @@ impl pallet_defi::Config for Runtime {
 	type Currency = Balances;
 	type DepositRate = DepositRate;
 	type BorrowingRate = BorrowingRate;
-	type NumberOfBlocksDaily = NumberOfBlocksDaily;
+	type NumberOfBlocksYearly = NumberOfBlocksYearly;
 }
 
 // Create the runtime by composing the FRAME pallets that were previously configured.
@@ -461,8 +461,8 @@ impl_runtime_apis! {
 		fn get_debt(user: AccountId) -> pallet_defi_rpc_runtime_api::BalanceInfo<Balance> {
 			DefiModule::get_debt(user)
 		}
-		fn get_allowed_borrowing_amount(user: AccountId) -> pallet_defi_rpc_runtime_api::BorrowingInfo<Balance> {
-			DefiModule::get_allowed_borrowing_amount(user)
+		fn get_allowed_borrowing_amount(user: AccountId) -> pallet_defi_rpc_runtime_api::BalanceInfo<Balance> {
+			DefiModule::get_allowed_borrowing_amount(user, 0, true)
 		}
 		fn get_deposit_apy() -> pallet_defi_rpc_runtime_api::BalanceInfo<Balance> {
 			DefiModule::get_deposit_apy()
