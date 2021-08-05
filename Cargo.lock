@@ -3971,10 +3971,13 @@ dependencies = [
  "frame-benchmarking",
  "frame-support",
  "frame-system",
+ "hex-literal",
+ "pallet-balances",
  "pallet-defi-rpc-runtime-api",
  "parity-scale-codec",
  "serde",
  "sp-core",
+ "sp-io",
  "sp-runtime",
  "sp-std",
 ]

@@ -26,7 +26,6 @@ runtime-benchmarks = [
     'pallet-defi/runtime-benchmarks',
     'pallet-timestamp/runtime-benchmarks',
     'sp-runtime/runtime-benchmarks',
-    'pallet-defi/runtime-benchmarks',
 ]
 std = [
     'codec/std',

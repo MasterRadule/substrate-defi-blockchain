@@ -59,13 +59,34 @@ version = '3.0.0'
 git = 'https://github.com/paritytech/substrate.git'
 tag = 'monthly-2021-07'
 
+[dependencies.sp-io]
+default-features = false
+version = '3.0.0'
+git = 'https://github.com/paritytech/substrate.git'
+tag = 'monthly-2021-07'
+
+[dependencies.pallet-balances]
+default-features = false
+git = 'https://github.com/paritytech/substrate.git'
+tag = 'monthly-2021-07'
+version = '3.0.0'
+
+[dependencies.hex-literal]
+version = '0.3.1'
+
 [dependencies.pallet-defi-rpc-runtime-api]
 default-features = false
 path = "runtime-api"
 
 [features]
 default = ['std']
-runtime-benchmarks = ['frame-benchmarking']
+runtime-benchmarks = [
+    'frame-benchmarking',
+    'frame-support/runtime-benchmarks',
+    'frame-system/runtime-benchmarks',
+    'pallet-balances/runtime-benchmarks',
+    'sp-runtime/runtime-benchmarks',
+]
 std = [
     'frame-support/std',
     'frame-system/std',
@@ -75,5 +96,6 @@ std = [
     'sp-runtime/std',
     'sp-std/std',
     'sp-core/std',
+    'pallet-balances/std',
 ]
 try-runtime = ['frame-support/try-runtime']

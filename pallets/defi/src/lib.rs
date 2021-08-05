@@ -59,7 +59,7 @@ pub mod pallet {
     }
 
     type AccountIdOf<T> = <T as frame_system::Config>::AccountId;
-    type BalanceOf<T> = <<T as Config>::Currency as Currency<AccountIdOf<T>>>::Balance;
+    pub(crate) type BalanceOf<T> = <<T as Config>::Currency as Currency<AccountIdOf<T>>>::Balance;
 
     #[pallet::pallet]
     #[pallet::generate_store(pub (super) trait Store)]
@@ -126,7 +126,7 @@ pub mod pallet {
 
             // Put updated address info into storage
             <Accounts<T>>::insert(&user, address_info);
-
+            
             // Emit an event
             Self::deposit_event(Event::Deposited(user, amount, current_block));
 
