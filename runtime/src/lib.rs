@@ -269,6 +269,7 @@ impl pallet_sudo::Config for Runtime {
 parameter_types! {
 	pub DepositRate: FixedU128 = FixedU128::from_inner(92828) / FixedU128::from_inner(10000000000000);
 	pub BorrowingRate: FixedU128 = FixedU128::from_inner(128727) / FixedU128::from_inner(10000000000000);
+	pub CollateralFactor: FixedU128 = FixedU128::from_inner(75) / FixedU128::from_inner(100);
 	pub const NumberOfBlocksYearly: u32 = 5256000;
 }
 
@@ -278,6 +279,7 @@ impl pallet_defi::Config for Runtime {
 	type Currency = Balances;
 	type DepositRate = DepositRate;
 	type BorrowingRate = BorrowingRate;
+	type CollateralFactor = CollateralFactor;
 	type NumberOfBlocksYearly = NumberOfBlocksYearly;
 	type WeightInfo = pallet_defi::weights::SubstrateWeight<Runtime>;
 }

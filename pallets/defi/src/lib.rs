@@ -14,6 +14,7 @@ mod tests;
 mod benchmarking;
 
 pub mod weights;
+
 pub use weights::WeightInfo;
 
 #[derive(Encode, Decode, Default, PartialEq, Eq)]
@@ -58,6 +59,9 @@ pub mod pallet {
         /// Borrowing rate
         type BorrowingRate: Get<FixedU128>;
 
+        /// Collateral factor
+        type CollateralFactor: Get<FixedU128>;
+
         /// Number of blocks on yearly basis
         type NumberOfBlocksYearly: Get<u32>;
 
@@ -77,7 +81,7 @@ pub mod pallet {
     pub(super) type Accounts<T: Config> = StorageMap<_, Blake2_128Concat, AccountIdOf<T>, AddressInfo<BalanceOf<T>, T::BlockNumber>, ValueQuery>;
 
     #[pallet::event]
-    #[pallet::metadata(AccountIdOf <T> = "AccountId", BalanceOf <T> = "Balance", T::BlockNumber = "BlockNumber")]
+    #[pallet::metadata(AccountIdOf<T> = "AccountId", BalanceOf<T> = "Balance", T::BlockNumber = "BlockNumber")]
     #[pallet::generate_deposit(pub (super) fn deposit_event)]
     pub enum Event<T: Config> {
         /// Funds deposited. [who, amount, block]
@@ -88,6 +92,8 @@ pub mod pallet {
         LoanRepaid(AccountIdOf<T>, BalanceOf<T>, T::BlockNumber),
         /// Funds borrowed. [who, amount, block]
         Borrowed(AccountIdOf<T>, BalanceOf<T>, T::BlockNumber),
+        /// Address liquidated. [who]
+        AddressLiquidated(AccountIdOf<T>),
     }
 
     #[pallet::error]
@@ -133,7 +139,7 @@ pub mod pallet {
 
             // Put updated address info into storage
             <Accounts<T>>::insert(&user, address_info);
-            
+
             // Emit an event
             Self::deposit_event(Event::Deposited(user, amount, current_block));
 
@@ -273,6 +279,31 @@ pub mod pallet {
         }
     }
 
+    #[pallet::hooks]
+    impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
+        fn on_initialize(_n: T::BlockNumber) -> Weight {
+            for address in <Accounts<T>>::iter() {
+                let collateral = FixedU128::from_inner(Self::get_balance(address.0.clone()).balance.saturated_into::<u128>());
+                let borrowed = FixedU128::from_inner(Self::get_debt(address.0.clone()).balance.saturated_into::<u128>());
+                let collateralized_balance = collateral.saturating_mul(T::CollateralFactor::get());
+
+                if borrowed > collateralized_balance {
+                    let mut address_info = <Accounts<T>>::get(&address.0);
+
+                    address_info.deposit_principal = BalanceOf::<T>::zero();
+                    address_info.deposit_date = T::BlockNumber::zero();
+                    address_info.borrow_principal = BalanceOf::<T>::zero();
+                    address_info.borrow_date = T::BlockNumber::zero();
+
+                    <Accounts<T>>::insert(&address.0, address_info);
+                    Self::deposit_event(Event::AddressLiquidated(address.0));
+                }
+            }
+
+            0
+        }
+    }
+
     impl<T: Config> Pallet<T> {
         /// Get user's balance
         pub fn get_balance(user: T::AccountId) -> BalanceInfo<BalanceOf<T>> {
@@ -316,7 +347,7 @@ pub mod pallet {
             let borrowing_balance_fixed = FixedU128::from_inner(borrowing_balance.saturated_into::<u128>());
 
             // Calculate allowed borrowing amount
-            let allowed_borrowing_amount = (deposit_balance_fixed.saturating_mul(FixedU128::from_inner(75) / FixedU128::from_inner(100))
+            let allowed_borrowing_amount = (deposit_balance_fixed.saturating_mul(T::CollateralFactor::get())
                 .saturating_sub(borrowing_balance_fixed)).into_inner().saturated_into();
 
             return BalanceInfo { balance: allowed_borrowing_amount };
@@ -326,14 +357,14 @@ pub mod pallet {
         pub fn get_deposit_apy() -> BalanceInfo<BalanceOf<T>> {
             let deposit_apy = (FixedU128::one().saturating_add(T::DepositRate::get())).saturating_pow(T::NumberOfBlocksYearly::get() as usize).saturating_sub(FixedU128::one());
 
-            return BalanceInfo{balance: deposit_apy.into_inner().saturated_into()};
+            return BalanceInfo { balance: deposit_apy.into_inner().saturated_into() };
         }
 
         /// Get borrowing APY
         pub fn get_borrowing_apy() -> BalanceInfo<BalanceOf<T>> {
             let borrowing_apy = (FixedU128::one().saturating_add(T::BorrowingRate::get())).saturating_pow(T::NumberOfBlocksYearly::get() as usize).saturating_sub(FixedU128::one());
 
-            return BalanceInfo{balance: borrowing_apy.into_inner().saturated_into()};
+            return BalanceInfo { balance: borrowing_apy.into_inner().saturated_into() };
         }
 
         /// Get principal with accrued interest
