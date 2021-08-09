@@ -279,6 +279,7 @@ impl pallet_defi::Config for Runtime {
 	type DepositRate = DepositRate;
 	type BorrowingRate = BorrowingRate;
 	type NumberOfBlocksYearly = NumberOfBlocksYearly;
+	type WeightInfo = pallet_defi::weights::SubstrateWeight<Runtime>;
 }
 
 // Create the runtime by composing the FRAME pallets that were previously configured.

@@ -7,11 +7,14 @@ use sp_runtime::{
 	traits::{BlakeTwo256, IdentityLookup},
 };
 use frame_support::sp_runtime::{FixedU128};
+use hex_literal::hex;
+use codec::Decode;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
 
 pub type Balance = u128;
+pub type AccountId = u128;
 
 // Configure a mock runtime to test the pallet.
 frame_support::construct_runtime!(
@@ -41,7 +44,7 @@ impl system::Config for Test {
 	type BlockNumber = u64;
 	type Hash = H256;
 	type Hashing = BlakeTwo256;
-	type AccountId = u64;
+	type AccountId = AccountId;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
 	type Event = Event;
@@ -90,10 +93,37 @@ impl pallet_defi::Config for Test {
 	type NumberOfBlocksYearly = NumberOfBlocksYearly;
 }
 
-pub struct ExtBuilder;
+fn alice() -> AccountId {
+	let bytes = hex!("d43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d");
+	AccountId::decode(&mut &bytes[..]).unwrap_or_default()
+}
+
+pub struct ExtBuilder {
+	endowed_accounts: Vec<(AccountId, Balance)>,
+}
+
+impl Default for ExtBuilder {
+	fn default() -> Self {
+		Self {
+			endowed_accounts: vec![(alice(), 100)],
+		}
+	}
+}
 
 impl ExtBuilder {
-	pub fn build() -> sp_io::TestExternalities {
-		system::GenesisConfig::default().build_storage::<Test>().unwrap().into()
+	pub fn build(self) -> sp_io::TestExternalities {
+		let mut storage = system::GenesisConfig::default().build_storage::<Test>().unwrap();
+
+		pallet_balances::GenesisConfig::<Test> {
+			balances: self
+				.endowed_accounts
+				.iter()
+				.map(|(acc, balance)| (*acc, *balance))
+				.collect(),
+		}
+			.assimilate_storage(&mut storage)
+			.unwrap();
+
+		storage.into()
 	}
 }

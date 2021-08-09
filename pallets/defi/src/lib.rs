@@ -1,4 +1,5 @@
 #![cfg_attr(not(feature = "std"), no_std)]
+#![feature(destructuring_assignment)]
 
 pub use pallet::*;
 use codec::{Decode, Encode};
@@ -11,6 +12,9 @@ mod tests;
 
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
+
+pub mod weights;
+pub use weights::WeightInfo;
 
 #[derive(Encode, Decode, Default, PartialEq, Eq)]
 #[cfg_attr(feature = "std", derive(Debug))]
@@ -35,7 +39,7 @@ pub mod pallet {
     use frame_support::sp_runtime::{FixedU128, FixedPointNumber, SaturatedConversion};
     use sp_runtime::traits::AccountIdConversion;
     use pallet_defi_rpc_runtime_api::{BalanceInfo};
-    use crate::AddressInfo;
+    use crate::{AddressInfo, WeightInfo};
 
     const PALLET_ID: PalletId = PalletId(*b"defisrvc");
 
@@ -56,6 +60,9 @@ pub mod pallet {
 
         /// Number of blocks on yearly basis
         type NumberOfBlocksYearly: Get<u32>;
+
+        /// Weight information for extrinsics in this pallet
+        type WeightInfo: WeightInfo;
     }
 
     type AccountIdOf<T> = <T as frame_system::Config>::AccountId;
@@ -98,7 +105,7 @@ pub mod pallet {
     #[pallet::call]
     impl<T: Config> Pallet<T> {
         /// Deposit funds
-        #[pallet::weight(10_000 + T::DbWeight::get().writes(1))]
+        #[pallet::weight(T::WeightInfo::deposit())]
         pub fn deposit(origin: OriginFor<T>, amount: BalanceOf<T>) -> DispatchResult {
             // Check that the extrinsic was signed and get the signer.
             // This function will return an error if the extrinsic is not signed.
@@ -135,7 +142,7 @@ pub mod pallet {
         }
 
         /// Withdraw funds
-        #[pallet::weight(10_000 + T::DbWeight::get().writes(1))]
+        #[pallet::weight(T::WeightInfo::withdraw())]
         pub fn withdraw(origin: OriginFor<T>, amount: BalanceOf<T>) -> DispatchResult {
             // Check that the extrinsic was signed and get the signer.
             // This function will return an error if the extrinsic is not signed.
@@ -178,7 +185,7 @@ pub mod pallet {
         }
 
         /// Borrow funds
-        #[pallet::weight(10_000 + T::DbWeight::get().writes(1))]
+        #[pallet::weight(T::WeightInfo::borrow())]
         pub fn borrow(origin: OriginFor<T>, amount: BalanceOf<T>) -> DispatchResult {
             // Check that the extrinsic was signed and get the signer.
             // This function will return an error if the extrinsic is not signed.
@@ -223,7 +230,7 @@ pub mod pallet {
         }
 
         /// Repay loan
-        #[pallet::weight(10_000 + T::DbWeight::get().writes(1))]
+        #[pallet::weight(T::WeightInfo::repay())]
         pub fn repay(origin: OriginFor<T>, mut amount: BalanceOf<T>) -> DispatchResult {
             // Check that the extrinsic was signed and get the signer.
             // This function will return an error if the extrinsic is not signed.
